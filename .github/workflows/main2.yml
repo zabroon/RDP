@@ -34,7 +34,36 @@ jobs:
         } else {
             "Could not detect address." | Out-File -FilePath "rdp-address.txt" -Encoding utf8
         }
-
+    - name: Test RDP connectivity
+      shell: powershell
+      run: |
+        # خواندن فایل آدرس (دقیقاً همانی که مرحله قبل ساخت)
+        $addressLine = Get-Content "rdp-address.txt" -Raw
+        if ($addressLine -match 'RDP Address: (.+)') {
+            $fullAddress = $matches[1].Trim()
+            Write-Host "Testing RDP at: $fullAddress"
+            $hostname, $port = $fullAddress -split ':'
+            try {
+                $tcp = New-Object System.Net.Sockets.TcpClient
+                $tcp.Connect($hostname, [int]$port)
+                $stream = $tcp.GetStream()
+                $buffer = New-Object byte[] 8
+                $stream.Read($buffer, 0, $buffer.Length) | Out-Null
+                $response = [System.Text.Encoding]::ASCII.GetString($buffer)
+                if ($response -match "RDP") {
+                    Write-Host "✅ RDP server is live and responding!"
+                } else {
+                    Write-Host "⚠️ Connected but no RDP banner received."
+                }
+                $tcp.Close()
+            } catch {
+                Write-Host "❌ Failed to connect: $_"
+                exit 1
+            }
+        } else {
+            Write-Host "❌ Could not parse address from rdp-address.txt"
+            exit 1
+        }
     - name: Upload address as artifact
       uses: actions/upload-artifact@v4
       with:
